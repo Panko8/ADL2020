@@ -49,14 +49,15 @@ class holder(): #for loss, accuracy ...
         assert save_dir != None, "Please state your saving path..."
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
+        save_mode = "w" if self.overwrite_file else "a"
         for mode in self.history:
             if self.history[mode] != {}: #if not empty
                 outf = save_dir+'/'+mode+".log"
-                if not os.path.exists(outf) or self.overwrite_file:
-                    with open(save_dir+'/'+mode+".log", "w") as f:
-                        #call writer
-                        out = self.writer(mode)
-                        f.write(out)
+                #if not os.path.exists(outf) or self.overwrite_file:
+                with open(save_dir+'/'+mode+".log", save_mode) as f:
+                    #call writer
+                    out = self.writer(mode)
+                    f.write(out)
                         
                         
     def writer(self, mode):

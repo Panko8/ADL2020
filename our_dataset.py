@@ -218,10 +218,108 @@ class Image_dataset(Dataset): #NOT FOR REAL TIME USAGE, ONE IMAGE AT A TIMEs
         out.data = sum([dataset.data for dataset in datasets], [])
         return out
 
+class Video_dataset(Image_dataset): # can only be instantiated by "concat datasets"
+    @classmethod
+    def concat_datasets(cls, datasets, TRAIN, window, stride):
+        """
+        Concat datasets of same type.
+        Please make sure their data are unique by yourself or the data can be duplicated.
+        @Arguments:
+            datasets: list of Image_dataset object
+            TRAIN: bool
+        @Return:
+            out: a Image_dataset object
+        """
+        def merge_list_of_dicts(dicts:list):
+            merge={}
+            for dic in dicts:
+                merge.update(dic)    # modifies z with y's keys and values & returns None
+            return merge
+        def is_concatable(datasets):
+            def equal(iterator):
+               return len(set(iterator)) <= 1
+            return equal([dataset.concat_original for dataset in datasets]) and equal([dataset.resized_w for dataset in datasets]) and equal([dataset.resized_h for dataset in datasets])
+        assert len(datasets)>0, "Empty input"
+        if not is_concatable(datasets):
+            raise TypeError("Only dataset with same shape of input can be concatenated")
+        out=cls(YOLO_model=None, files_name=[])
+        ## New part
+        assert window%2==1, "Only support odd window"
+        out.window = window
+        out._window = (window-1)*2+1 # flip skipping
+        out.stride = stride
+        ##
+        out.TRAIN=TRAIN
+        out.concat_original = datasets[0].concat_original
+        out.resized_w = datasets[0].resized_w
+        out.resized_h = datasets[0].resized_h
+        out.labels = merge_list_of_dicts( [dataset.labels for dataset in datasets] )
+        out.img_size = merge_list_of_dicts( [dataset.img_size for dataset in datasets] )
+        out.resized_images = merge_list_of_dicts( [dataset.resized_images for dataset in datasets] )
+        out.fmaps = merge_list_of_dicts( [dataset.fmaps for dataset in datasets] )
+        out.data = sum([dataset.data for dataset in datasets], [])
+        return out
 
-if __name__=="__main__":
-    from tool.utils import *
-    from tool.darknet2pytorch import Darknet
+    def __len__(self):
+        N=len(self.data)
+        #r=self._window//2
+        w=self._window
+        d=self.stride
+        if N<w:
+            return 0
+        return int((N-w)//d)+1
+    
+    def __getitem__(self, index):
+        index = int( self._window//2 + (index*self.stride) ) #center point's index. It make sure index=0 not causing error
+        if index+self._window//2 >= len(self.data): #out of range
+            raise IndexError("Bad index")
+        index_range = range(index-self._window//2, index+self._window//2+1, 2) #flip skipping
+        print(index_range)
+        center = index
+        if self.TRAIN:
+            frames=[]
+            for index in index_range:
+                (bbox1,bbox2), (file, frame, flip), distance = self.data[index]
+                fmap = self.fmaps[(file,frame)]
+                W,H = self.img_size[(file,frame)]
+                mask1, mask2 = self.draw_mask_and_resize(W,H,bbox1), self.draw_mask_and_resize(W,H,bbox2)
+                ###mask1, mask2 = self.masks[(file,frame,bbox1)], self.masks[(file,frame,bbox2)]
+                img = self.resized_images[(file,frame)] if self.concat_original else None
+                inp = self.concat_imgs([mask1,mask2], img) #(2or5, 608, 608)
+                if flip:
+                    inp = self.flip(inp)
+                    fmap = self.flip(fmap)
+                frames.append(inp)
+                
+            (bbox1,bbox2), (file, frame, flip), distance = self.data[center] #only center file/frame/bboxs/distance is returned
+            fmap = self.fmaps[(file,frame)] #only center fmap is returned
+            inp = torch.cat(frames, dim=0) #cat on channel!! --> (6or15, 608, 608)                                    
+            return file, frame, flip, bbox1, bbox2, inp, fmap, distance
+        else:
+            frames=[]
+            for index in index_range:
+                (bbox1,bbox2), (file, frame, flip) = self.data[index]
+                fmap = self.fmaps[(file,frame)]
+                W,H = self.img_size[(file,frame)]
+                mask1, mask2 = self.draw_mask_and_resize(W,H,bbox1), self.draw_mask_and_resize(W,H,bbox2)
+                ###mask1, mask2 = self.masks[(file,frame,bbox1)], self.masks[(file,frame,bbox2)]
+                img = self.resized_images[(file,frame)] if self.concat_original else None
+                inp = self.concat_imgs([mask1,mask2], img) #(2or5, 608, 608)
+                if flip:
+                    inp = self.flip(inp)
+                    fmap = self.flip(fmap)
+                frames.append(inp)
+                
+            (bbox1,bbox2), (file, frame, flip) = self.data[center] #only center file/frame/bboxs is returned
+            fmap = self.fmaps[(file,frame)] #only center fmap is returned
+            inp = torch.cat(frames, dim=0) #cat on channel!! --> (6or15, 608, 608)                                    
+            return file, frame, flip, bbox1, bbox2, inp, fmap
+
+    
+
+from tool.utils import *
+from tool.darknet2pytorch import Darknet
+def construct_all():
     ## Construct dataset, need cuda!
     ## PLEASE MAKE SURE YOU HAVE EDIT "DATASET_HUMAN_PATH" BEFOREHAND, OR THIS SCRIPT CAN HARM YOUR DRIVE
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -232,6 +330,15 @@ if __name__=="__main__":
     YOLO_model.eval()
     print("Load YOLO Complete. Start construction ...")
     Image_dataset.construct_datasets_human(YOLO_model, list(range(21)), OUT_DIR=DATASET_HUMAN_PATH )
+
+def _debug():
+    global debug_db
+    def load_video_dataset(files:list, window:int, stride:int, dataset_path=DATASET_HUMAN_PATH):
+        return Video_dataset.concat_datasets([torch.load(dataset_path+'/'+'video{}_db.pt'.format(file)) for file in files], TRAIN=True, window=window, stride=stride)
+    debug_db = load_video_dataset([0], window=7, stride=4)
+
+if __name__=="__main__":
+    _debug()
     
         
 
