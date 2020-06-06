@@ -13,7 +13,7 @@ class Image_model_by_distance(nn.Module):
         self.lrelu = nn.LeakyReLU(0.1)
         self.relu = nn.ReLU()
         self.drop2d = nn.Dropout2d(0, inplace=True)
-        self.drop = nn.Dropout(0, inplace=True)
+        self.drop = nn.Dropout(0.5, inplace=True)
         
         self.conv1 = nn.Conv2d(in_channel, 16, (3,3), padding=1)
         self.norm1 = nn.BatchNorm2d(16)
@@ -53,7 +53,8 @@ class Image_model_by_distance(nn.Module):
         #flatten
         x = x.view(batch_size, -1)
         x = self.lrelu(self.drop(self.fc1(x)))
-        x = self.lrelu(self.drop(self.fc2(x)))
+        ###x = self.lrelu(self.drop(self.fc2(x)))
+        x = self.lrelu(self.fc2(x))
         return x
 
 def _debug():

@@ -158,7 +158,8 @@ def get_coordinate_by_yolo_box(lines:dict, frame:int, bbox:tuple, class_limit=No
 
 
 def demo():
-    lines=parse_file('0000.txt')
+    global lines
+    lines=parse_file('0011.txt')
     #the below bbox are exactly written in Kitti's label file. It corresponds to a "Cyclist"
     print('Return format: (3D_coodinate, IOU_confidence)\n')
     print(  get_coordinate_by_yolo_box(lines, 0, (737.619499, 161.531951, 931.112229, 374.000000), printing=True)  )

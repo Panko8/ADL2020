@@ -21,35 +21,51 @@ import pickle
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
-# In[ ]:
+# In[2]:
 
+
+'''
+檢視loss的方法，開一個terminal (e.g. Windows PowerShell) [如果是cmd, 把cat改成type即可]
+
+cd [裝著這檔案的路徑]
+cat history_[一些NAME]/training.log
+cat history_[一些NAME]/validation.log
+'''
+
+
+# In[3]:
+
+
+##### 若訓練因error而中斷，且必須要[重train和error前相同的epoch]，則請把history_holders裡面對應epoch的.holder刪掉，不然存不起來
 
 ##### 若訓練發生問題，通常只需要改這邊的參數
 # Batch_size, GRAM不夠時下降這個，若沒有GRAM問題:8~12是正常的 [最小值為4，4以下代表不該用那台電腦train]
 BATCH_SIZE = 8
-# leaning_rate
-LEARNING_RATE = 5e-6 
-#當START_EPOCH不為0時，會嘗試從MODEL_WEIGHT_FILE_PATH去讀取[上一個]epoch的weight
+# Leaning_rate, customMSE通常用5e-6, 一般MSE通常用1e-4~5e-5
+LEARNING_RATE = 7e-5
+# 當START_EPOCH不為0時，會嘗試從MODEL_WEIGHT_FILE_PATH去讀取[上一個]epoch的weight
 START_EPOCH = 0 
-#決定百分之多少個epoch要存一次weight，只決定了存檔時機
-COUNTER = 0.05  
+# COUNTER決定百分之多少個epoch要存一次weight，只決定了存檔時機，也會影響輸出history裡面的Fraction欄位
+COUNTER = 0.5
+# WEIGHT_DECAY 決定了L2 regularization的多寡，越大則regularize越多，其值通常在0.001這個scale。若太大可能造成梯度爆炸
+WEIGHT_DECAY = 0.001
 
 ##### 不該碰的部分
 MAX_EPOCH = 100 ##決定最多會連續跑多少個epoch，這只是上限值，通常不會碰到它，設越大越好
 model = our_model.Image_model_by_distance(in_channel=2) ##請不要改這個
-NAME = "maskonly_customMSE" 
+NAME = "maskonly_MSE" 
 POSTFIX = "_" + NAME
 
 ##### 其他只影響檔名的參數
 MODEL_WEIGHT_SAVE_PATH = "./model_weight" + POSTFIX  #testing時，找weight file的路徑
 
 
-# In[2]:
+# In[4]:
 
 
 def running(dataset, epoch, mode, batch_size=3, frac=None):
     
-    if mode=="training":
+    if mode in ["training", "debug"]:
         model.train()
         shuffle=True
     else:
@@ -81,11 +97,13 @@ def running(dataset, epoch, mode, batch_size=3, frac=None):
         if model.in_channel==2:
             x_inp = x_inp[:,3:,:,:] #(B,5,608,608) -> (B,2,608,608)
 
-        if mode in ["training"]:
+        if mode in ["training", "debug"]:
             predicted_distance = model(x_inp, x_fmap) #(B,1)
             predicted_distance.squeeze_(-1) #(B,)
             #clamp GT to avoid gradient explode
-            loss = criteria_custom_MSE(predicted_distance, y_distance.clamp(min=0.2))
+            #TRAINING CRITERIA, criteria_MSE/criteria_custom_MSE 二選一
+            loss = loss_view = criteria_MSE(predicted_distance, y_distance)
+            #loss = criteria_custom_MSE(predicted_distance, y_distance.clamp(min=0.2))
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -93,11 +111,11 @@ def running(dataset, epoch, mode, batch_size=3, frac=None):
             with torch.no_grad():
                 predicted_distance = model(x_inp, x_fmap) #(B,1)
                 predicted_distance.squeeze_(-1) #(B,)
-                loss = criteria_MSE(predicted_distance, y_distance)
+                loss_view = criteria_MSE(predicted_distance, y_distance)
         
         predicted_distance = predicted_distance.detach().cpu() #(B,)
-        loss = loss.detach().cpu().item()
-        total_loss += loss
+        loss_view = loss_view.detach().cpu().item()
+        total_loss += loss_view*curr_batch_size
         
         bbox1 = [ [int(t[i].item()) for t in bbox1] for i in range(curr_batch_size) ]
         bbox2 = [ [int(t[i].item()) for t in bbox2] for i in range(curr_batch_size) ]
@@ -115,7 +133,7 @@ def running(dataset, epoch, mode, batch_size=3, frac=None):
             print('Saved at breakpoint: Epoch {}, frac {}, where approx_total_loss={}'.format(epoch, round(counter,2), total_loss/len(dataset)/counter))
             counter += counter_step
     
-    if mode=="training":
+    if mode in ["training", "debug"] or frac==None:
         history_holder.push(mode, (epoch, 1.0), total_loss/len(dataset))
     else:
         history_holder.push(mode, (epoch,frac), total_loss/len(dataset))
@@ -125,7 +143,7 @@ def running(dataset, epoch, mode, batch_size=3, frac=None):
         
 
 
-# In[3]:
+# In[5]:
 
 
 def custom_MSELoss(predicted_distance, y_distance):
@@ -136,21 +154,27 @@ def custom_MSELoss(predicted_distance, y_distance):
     
 
 
-# In[4]:
+# In[6]:
 
 
-def load_dataset(files:list, dataset_path=DATASET_HUMAN_PATH):
+def load_raw_dataset(files:list, dataset_path=DATASET_HUMAN_PATH):
     return Image_dataset.concat_datasets([torch.load(dataset_path+'/'+'video{}_db.pt'.format(file)) for file in files], TRAIN=True)
 
 
-# In[5]:
+# In[7]:
+
+
+#debug_db = load_raw_dataset([0])
+
+
+# In[8]:
 
 
 def save_model(fname):
     torch.save(model.state_dict(), MODEL_WEIGHT_SAVE_PATH+"/"+fname)
 
 
-# In[10]:
+# In[9]:
 
 
 def save_raw_holders(holders:list, fname, overwrite=False):
@@ -162,7 +186,7 @@ def save_raw_holders(holders:list, fname, overwrite=False):
         pickle.dump(holders, f)
 
 
-# In[ ]:
+# In[10]:
 
 
 def load_raw_holders(fname):
@@ -172,29 +196,16 @@ def load_raw_holders(fname):
     return data
 
 
-# In[6]:
+# In[11]:
 
 
-debug_db = load_dataset([12])
-
-
-# In[7]:
-
-
-## this part need roughly 4~5 GB RAM
-train_db = load_dataset([13,16,19])
-
-
-# In[7]:
-
-
-valid_db = load_dataset([15])
-test_db = load_dataset([17])
+## this part need roughly 5~6 GB RAM !!
+all_db = torch.load(DATASET_HUMAN_PATH+'/'+'all_db.pt')
 
 
 # # Training
 
-# In[9]:
+# In[ ]:
 
 
 #model = our_model.Image_model_by_distance(in_channel=2) # in_channel=2 <-> mask only
@@ -203,9 +214,8 @@ if START_EPOCH !=0:
     model.load_state_dict(torch.load(MODEL_WEIGHT_SAVE_PATH+"/model_e{}.pkl".format(START_EPOCH-1)))
 
 model = model.to(device)
-LR = LEARNING_RATE
 
-optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 criteria_MSE = torch.nn.MSELoss().to(device)
 criteria_custom_MSE = custom_MSELoss
 
@@ -228,9 +238,11 @@ if not os.path.exists(MODEL_WEIGHT_SAVE_PATH):
 for epoch in range(max_epoch):
     epoch += START_epoch
     try:
-        #running(debug_db, epoch, "training", batch_size)
-        running(train_db, epoch, "training", batch_size)
-        running(valid_db, epoch, "validation", batch_size)
+        #running(debug_db, epoch, "debug", batch_size)
+        all_db.data = all_db.train_data
+        running(all_db, epoch, "training", batch_size)
+        all_db.data = all_db.valid_data
+        running(all_db, epoch, "validation", batch_size)
     except:
         save_model("model_e{}_WARN.pkl".format(epoch))
         save_raw_holders([history_holder, predictions_holder], NAME+"_e{}.holder".format(epoch)) #Don't allow overwrite, delete the old one instead!
@@ -240,48 +252,13 @@ for epoch in range(max_epoch):
     save_model("model_e{}.pkl".format(epoch))
     history_holder.save()
     predictions_holder.save()
+else:
+    save_raw_holders([history_holder, predictions_holder], NAME+".holder", overwrite=True)
+    history_holder.save()
+    predictions_holder.save()
 
 
 # # Testing
-
-# In[11]:
-
-
-def testing_wrapper(fname, epo, frac, batch_size=8):
-    global model, criteria_MSE
-    criteria_MSE = torch.nn.MSELoss().to(device)
-    model = our_model.Image_model_by_distance(in_channel=2) # in_channel=2 <-> mask only
-    model.load_state_dict(torch.load(MODEL_WEIGHT_SAVE_PATH+"/"+fname))
-    model = model.to(device)
-    #running(debug_db, epo, "debug", batch_size, frac=frac)
-    running(valid_db, epo, "validation", batch_size, frac=frac)
-    running(valid_db, epo, "testing", batch_size, frac=frac)
-
-    
-#history_holder = result_holder.holder(["Epoch", "Fraction"],["Loss"], 
-#                                        save_dir="./history"+POSTFIX,
-#                                        overwrite_file=True)
-#predictions_holder = result_holder.holder(["Epoch", "File", "Frame", "Flip", "bbox1", "bbox2"],
-#                                            ["Distance", "Ground_Truth"], 
-#                                            save_dir="./prediction"+POSTFIX,
-#                                            overwrite_file=True)
-'''
-for fname in os.listdir(MODEL_WEIGHT_SAVE_PATH):
-    tmp = fname[:-4].split("_")
-    epo = int( tmp[1][1:] )
-    if tmp[-1].endswith("WARN"):
-        continue
-    if len(tmp)==3:
-        frac = float( tmp[2][1:])
-    else:
-        frac = 1
-    if 2<=epo and frac in [1, 0.5]:
-        testing_wrapper(fname, epo, frac, batch_size=BATCH_SIZE)
-    
-history_holder.save()
-predictions_holder.save()
-'''
-
 
 # In[ ]:
 
@@ -290,6 +267,14 @@ predictions_holder.save()
 
 
 # # Below is debug region ...
+
+# In[ ]:
+
+
+#running(debug_db, 999, "testing", batch_size)
+#history_holder.save()
+#predictions_holder.save()
+
 
 # In[ ]:
 

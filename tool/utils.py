@@ -529,10 +529,10 @@ def unscale(W, H, boxes): #img is cv2 format
 
 def get_mask(W, H, bbox): #img is cv2 format
     #mask = np.zeros(img.shape[:2]) #(H,W,C)
-    mask = np.zeros((H,W))
+    mask = np.zeros((H,W), dtype=int)
     x1,y1,x2,y2 = bbox
     x1,y1,x2,y2 = map(str_to_int, [x1,y1,x2,y2])
     plot_mask = cv2.rectangle(mask, (x1, y1), (x2, y2), (1, 1, 1), -1)
-    return plot_mask.astype(np.float32)
+    return plot_mask
 
 
