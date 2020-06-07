@@ -3,16 +3,19 @@ from extract_kitti_label import *
 import os
 from PIL import Image
 from tqdm import tqdm, trange
-from tool.utils import *
+#from tool.utils import *
 import torch
 import cv2
 import numpy as np
 from global_variable import *
 from copy import deepcopy
 import numpy as np
+from torch.nn import functional as F
 
 #KITTI_LABEL_DIR #defined in extract_kitti_label
 use_cuda=True if torch.cuda.is_available() else False
+device = "cuda" if use_cuda else "cpu"
+
 
 class Image_dataset(Dataset): #NOT FOR REAL TIME USAGE, ONE IMAGE AT A TIMEs
     def __init__(self, YOLO_model, files_name=[0,1,2], class_limit=None, concat_original=False, data_augmentation=True, Train=True , resized_w=608, resized_h=608):
@@ -95,6 +98,20 @@ class Image_dataset(Dataset): #NOT FOR REAL TIME USAGE, ONE IMAGE AT A TIMEs
                                 datum2 = ((bbox1,bbox2), (file, frame, True))
                             self.data.append(datum2)
 
+    #def draw_mask_and_resize(self, W, H, bbox):
+    #    '''
+    #    Draw masks of bbox and resize to input shape
+    #    @Arguments:
+    #        W: width in "original" image
+    #        H: height in "original" image
+    #        bbox: bbox of (left, top, right, bottom) order in pixel scale
+    #    @Return:
+    #        mask: a mask of shape (resized_w, resized_h)
+    #    '''
+    #    x1,y1,x2,y2 = bbox
+    #    mask = cv2.resize( get_mask(W, H, bbox).float(), (self.resized_w, self.resized_h) )
+    #    return mask
+
     def draw_mask_and_resize(self, W, H, bbox):
         '''
         Draw masks of bbox and resize to input shape
@@ -105,9 +122,16 @@ class Image_dataset(Dataset): #NOT FOR REAL TIME USAGE, ONE IMAGE AT A TIMEs
         @Return:
             mask: a mask of shape (resized_w, resized_h)
         '''
+        def get_mask_tensor(W,H,bbox):
+            mask=torch.zeros((H,W), dtype=int).to(device)
+            x1,y1,x2,y2 = bbox
+            x1,y1,x2,y2 = map(str_to_int, [x1,y1,x2,y2])
+            mask[y1:y2+1,x1:x2+1] = 1
+            return mask
         x1,y1,x2,y2 = bbox
-        mask = cv2.resize( get_mask(W, H, bbox).astype(np.float32), (self.resized_w, self.resized_h) )
-        return mask
+        mask = F.interpolate( get_mask_tensor(W, H, bbox).float().unsqueeze(0), self.resized_h)
+        mask = F.interpolate( mask.permute(0,2,1), self.resized_w)
+        return mask.squeeze(0).permute(1,0)
     
     
     def concat_imgs(self, masks, img=None):
@@ -119,11 +143,11 @@ class Image_dataset(Dataset): #NOT FOR REAL TIME USAGE, ONE IMAGE AT A TIMEs
         @Return:
             x: a FloatTensor of shape (Channel, resized_w, resized_h)
         '''
-        concat=np.stack( masks, -1 ) #(W, H, 2)
+        concat=torch.stack( masks, -1 ) #(W, H, 2)
         if type(img)!=type(None):
-            concat=np.concatenate( (img, concat), -1 ) #(W,H,5)
-        concat=concat.transpose((2,0,1)) # (C=2or5, W, H)
-        return torch.tensor(concat).float()
+            concat=torch.cat( (img, concat), -1 ) #(W,H,5)
+        concat=concat.permute((2,0,1)) # (C=2or5, W, H)
+        return concat.float()
                 
                     
     def flip(self, t):
@@ -143,6 +167,10 @@ class Image_dataset(Dataset): #NOT FOR REAL TIME USAGE, ONE IMAGE AT A TIMEs
             mask1, mask2 = self.draw_mask_and_resize(W,H,bbox1), self.draw_mask_and_resize(W,H,bbox2)
             ###mask1, mask2 = self.masks[(file,frame,bbox1)], self.masks[(file,frame,bbox2)]
             img = self.resized_images[(file,frame)] if self.concat_original else None
+            mask1, mask2 = mask1.float().to(device), mask2.float().to(device)
+            if self.concat_original:
+                img = torch.tensor(img).float().to(device)
+                img = (img-img.mean())/255
             inp = self.concat_imgs([mask1,mask2], img)
             if flip:
                 inp = self.flip(inp)
@@ -154,6 +182,10 @@ class Image_dataset(Dataset): #NOT FOR REAL TIME USAGE, ONE IMAGE AT A TIMEs
             W,H = self.img_size[(file,frame)]
             mask1, mask2 = self.draw_mask_and_resize(W,H,bbox1), self.draw_mask_and_resize(W,H,bbox2)
             img = self.resized_images[(file,frame)] if self.concat_original else None
+            mask1, mask2 = torch.tensor(mask1).float().to(device), torch.tensor(mask2).float().to(device)
+            if self.concat_original:
+                img = torch.tensor(img).float().to(device)
+                img = (img-img.mean())/255
             inp = self.concat_imgs([mask1,mask2], img)
             if flip:
                 inp = self.flip(inp)
@@ -342,14 +374,17 @@ class Video_dataset(Image_dataset): # can only be instantiated by "concat datase
             fmap = self.fmaps[(file,frame)]
             W,H = self.img_size[(file,frame)]
             mask1, mask2 = self.draw_mask_and_resize(W,H,bbox1), self.draw_mask_and_resize(W,H,bbox2)
+            mask1, mask2 = torch.tensor(mask1).float().to(device), torch.tensor(mask2).float().to(device)
             interval = int(self.window//2)*self.stride
             center = index+interval
             video_range = range(center-interval, center+interval+1, self.stride)
             imgs=[]
             for cur_frame in video_range:
                 img = self.resized_images[(file,cur_frame)]
+                img = torch.tensor(img).float().to(device)
+                img = (img-img.mean())/255
                 imgs.append(img)
-            img = np.concatenate( imgs, -1 ) # (W,H,C)
+            img = torch.cat( imgs, -1 ) # (W,H,C)
             inp = self.concat_imgs([mask1,mask2], img) #(2or5, 608, 608)
             return file, frame, flip, bbox1, bbox2, inp, fmap, distance
             
@@ -358,14 +393,17 @@ class Video_dataset(Image_dataset): # can only be instantiated by "concat datase
             fmap = self.fmaps[(file,frame)]
             W,H = self.img_size[(file,frame)]
             mask1, mask2 = self.draw_mask_and_resize(W,H,bbox1), self.draw_mask_and_resize(W,H,bbox2)
+            mask1, mask2 = torch.tensor(mask1).float().to(device), torch.tensor(mask2).float().to(device)
             interval = int(self.window//2)*self.stride
             center = index+interval
             video_range = range(center-interval, center+interval+1, self.stride)
             imgs=[]
             for cur_frame in video_range:
                 img = self.resized_images[(file,cur_frame)]
+                img = torch.tensor(img).float().to(device)
+                img = (img-img.mean())/255
                 imgs.append(img)
-            img = np.concatenate( imgs, -1 ) # (W,H,C)
+            img = torch.cat( imgs, -1 ) # (W,H,C)
             inp = self.concat_imgs([mask1,mask2], img) #(2or5, 608, 608)
             return file, frame, flip, bbox1, bbox2, inp, fmap
 
@@ -384,6 +422,12 @@ def construct_all_raw(overwrite=False):
     YOLO_model.eval()
     print("Load YOLO Complete. Start construction ...")
     Image_dataset.construct_datasets_human(YOLO_model, list(range(21)), OUT_DIR=DATASET_HUMAN_PATH, overwrite=overwrite )
+
+def _debug_image():
+    global debug_db
+    def load_image_dataset(files:list, dataset_path=DATASET_HUMAN_PATH):
+        return Image_dataset.concat_datasets([torch.load(dataset_path+'/'+'video{}_db.pt'.format(file)) for file in files], TRAIN=True)
+    debug_db = load_image_dataset([0])
 
 def _debug_video():
     global debug_db
@@ -436,7 +480,7 @@ def read_all_db():
     
 if __name__=="__main__":
     #construct_and_split_image_dataset()
-    _debug_video()
+    _debug_image()
         
 
 

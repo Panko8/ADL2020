@@ -29,9 +29,10 @@ class Image_model_by_distance(nn.Module):
         self.norm6 = nn.BatchNorm2d(255)
         self.conv7 = nn.Conv2d(255, 255, (3,3), padding=1)
         self.norm7 = nn.BatchNorm2d(255)
+        self.fc1 = nn.Linear(255*4*4, 1)
         ##self.conv1x1 = nn.Conv2d(255, 64, (1,1) , padding=1)
-        self.fc1 = nn.Linear(255*4*4, 128)
-        self.fc2 = nn.Linear(128, 1)
+        ##self.fc1 = nn.Linear(255*4*4, 128)
+        ##self.fc2 = nn.Linear(128, 1)
     def forward(self, x, maps):
         '''
         x of shape (batch, in_channel, H=608, W=608)
@@ -52,9 +53,9 @@ class Image_model_by_distance(nn.Module):
         ###x = self.conv1x1(x)
         #flatten
         x = x.view(batch_size, -1)
-        x = self.lrelu(self.drop(self.fc1(x)))
+        x = self.fc1(x)
         ###x = self.lrelu(self.drop(self.fc2(x)))
-        x = self.lrelu(self.fc2(x))
+        ###x = self.lrelu(self.fc2(x))
         return x
 
 def _debug():

@@ -41,8 +41,9 @@ cat history_[一些NAME]/validation.log
 ##### 若訓練發生問題，通常只需要改這邊的參數
 # Batch_size, GRAM不夠時下降這個，若沒有GRAM問題:8~12是正常的 [最小值為4，4以下代表不該用那台電腦train]
 BATCH_SIZE = 8
-# Leaning_rate, customMSE通常用5e-6, 一般MSE通常用1e-4~5e-5
-LEARNING_RATE = 7e-5
+# Learning_rate, customMSE通常用5e-6, 一般MSE通常用1e-4~5e-5 [原model 2 linear]
+# Learning_rate, customMSE: ，一般MSE: 1e-5[1 linear]
+LEARNING_RATE = 1e-4
 # 當START_EPOCH不為0時，會嘗試從MODEL_WEIGHT_FILE_PATH去讀取[上一個]epoch的weight
 START_EPOCH = 0 
 # COUNTER決定百分之多少個epoch要存一次weight，只決定了存檔時機，也會影響輸出history裡面的Fraction欄位
@@ -52,8 +53,8 @@ WEIGHT_DECAY = 0.001
 
 ##### 不該碰的部分
 MAX_EPOCH = 100 ##決定最多會連續跑多少個epoch，這只是上限值，通常不會碰到它，設越大越好
-model = our_model.Image_model_by_distance(in_channel=2) ##請不要改這個
-NAME = "maskonly_MSE" 
+model = our_model.Image_model_by_distance(in_channel=5) ##請不要改這個
+NAME = "withimage_MSE" 
 POSTFIX = "_" + NAME
 
 ##### 其他只影響檔名的參數
@@ -103,6 +104,7 @@ def running(dataset, epoch, mode, batch_size=3, frac=None):
             #clamp GT to avoid gradient explode
             #TRAINING CRITERIA, criteria_MSE/criteria_custom_MSE 二選一
             loss = loss_view = criteria_MSE(predicted_distance, y_distance)
+            #loss_view = criteria_MSE(predicted_distance, y_distance)
             #loss = criteria_custom_MSE(predicted_distance, y_distance.clamp(min=0.2))
             optimizer.zero_grad()
             loss.backward()
@@ -205,7 +207,7 @@ all_db = torch.load(DATASET_HUMAN_PATH+'/'+'all_db.pt')
 
 # # Training
 
-# In[ ]:
+# In[12]:
 
 
 #model = our_model.Image_model_by_distance(in_channel=2) # in_channel=2 <-> mask only
