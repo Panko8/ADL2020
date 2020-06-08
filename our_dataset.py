@@ -331,6 +331,48 @@ class Video_dataset(Image_dataset): # can only be instantiated by "concat datase
         ##
         return out ##TODO view count, trim inbalanced
 
+    @classmethod
+    def all_db2videoset(cls, dataset, window, stride):
+        '''
+        Convert Image_dataset to Video_dataset, especially all_db format
+        '''
+        def trim_data(dataset):
+            trim_data = list(dataset.data)
+            lowest_frame = int(window//2)*(stride)
+            highest_frame = {}
+            for file in dataset.max_frame:
+                highest_frame[file] = dataset.max_frame[file] - lowest_frame
+            for sample in dataset.data:
+                curr_file = sample[1][0]
+                curr_frame = sample[1][1]
+                if curr_frame < lowest_frame or curr_frame > highest_frame[curr_file]:
+                    trim_data.remove(sample)
+            return trim_data
+        out=cls(YOLO_model=None, files_name=[])
+        assert window%2==1, "Only support odd window"
+        out.window = window
+        #out._window = (window-1)*2+1 # flip skipping
+        out.stride = stride
+        ##
+        out.TRAIN = dataset.TRAIN
+        out.concat_original = dataset.concat_original
+        out.resized_w = dataset.resized_w
+        out.resized_h = dataset.resized_h
+        out.labels = dataset.labels
+        out.img_size = dataset.img_size
+        out.resized_images = dataset.resized_images
+        out.fmaps = dataset.fmaps
+        
+        dataset.data = dataset.train_data
+        out.train_data = trim_data(dataset)
+        dataset.data = dataset.valid_data
+        out.valid_data = trim_data(dataset)
+        dataset.data = dataset.test_data
+        out.test_data = trim_data(dataset)
+        out.data=[]
+        return out
+        
+
     def __len__(self):
         '''N=len(self.data)
         #r=self._window//2
@@ -374,18 +416,23 @@ class Video_dataset(Image_dataset): # can only be instantiated by "concat datase
             fmap = self.fmaps[(file,frame)]
             W,H = self.img_size[(file,frame)]
             mask1, mask2 = self.draw_mask_and_resize(W,H,bbox1), self.draw_mask_and_resize(W,H,bbox2)
-            mask1, mask2 = torch.tensor(mask1).float().to(device), torch.tensor(mask2).float().to(device)
+            mask1, mask2 = mask1.float().to(device), mask2.float().to(device)
             interval = int(self.window//2)*self.stride
-            center = index+interval
+            center = frame
             video_range = range(center-interval, center+interval+1, self.stride)
+            ##print("index={}, center={}, interval={}, window={}, stride={}".format(index, center, interval, self.window, self.stride))
             imgs=[]
             for cur_frame in video_range:
                 img = self.resized_images[(file,cur_frame)]
                 img = torch.tensor(img).float().to(device)
                 img = (img-img.mean())/255
                 imgs.append(img)
-            img = torch.cat( imgs, -1 ) # (W,H,C)
+            img = torch.cat( imgs, -1 )# (W,H,C)
+            assert img.device.type == device, "GPU conversion error"
             inp = self.concat_imgs([mask1,mask2], img) #(2or5, 608, 608)
+            if flip:
+                inp = self.flip(inp)
+                fmap = self.flip(fmap)
             return file, frame, flip, bbox1, bbox2, inp, fmap, distance
             
         else:
@@ -393,9 +440,9 @@ class Video_dataset(Image_dataset): # can only be instantiated by "concat datase
             fmap = self.fmaps[(file,frame)]
             W,H = self.img_size[(file,frame)]
             mask1, mask2 = self.draw_mask_and_resize(W,H,bbox1), self.draw_mask_and_resize(W,H,bbox2)
-            mask1, mask2 = torch.tensor(mask1).float().to(device), torch.tensor(mask2).float().to(device)
+            mask1, mask2 = mask1.float().to(device), mask2.float().to(device)
             interval = int(self.window//2)*self.stride
-            center = index+interval
+            center = frame
             video_range = range(center-interval, center+interval+1, self.stride)
             imgs=[]
             for cur_frame in video_range:
@@ -403,8 +450,12 @@ class Video_dataset(Image_dataset): # can only be instantiated by "concat datase
                 img = torch.tensor(img).float().to(device)
                 img = (img-img.mean())/255
                 imgs.append(img)
-            img = torch.cat( imgs, -1 ) # (W,H,C)
+            img = torch.cat( imgs, -1 )# (W,H,C)
+            assert img.device.type == device, "GPU conversion error"
             inp = self.concat_imgs([mask1,mask2], img) #(2or5, 608, 608)
+            if flip:
+                inp = self.flip(inp)
+                fmap = self.flip(fmap)
             return file, frame, flip, bbox1, bbox2, inp, fmap
 
     

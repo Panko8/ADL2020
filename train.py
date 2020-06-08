@@ -11,7 +11,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 from extract_kitti_label import *
-from our_dataset import Image_dataset
+from our_dataset import Image_dataset, Video_dataset
 from tqdm import tqdm, trange
 import result_holder
 import our_model
@@ -43,18 +43,22 @@ cat history_[一些NAME]/validation.log
 BATCH_SIZE = 8
 # Learning_rate, customMSE通常用5e-6, 一般MSE通常用1e-4~5e-5 [原model 2 linear]
 # Learning_rate, customMSE: ，一般MSE: 1e-5[1 linear]
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 7e-5
 # 當START_EPOCH不為0時，會嘗試從MODEL_WEIGHT_FILE_PATH去讀取[上一個]epoch的weight
 START_EPOCH = 0 
 # COUNTER決定百分之多少個epoch要存一次weight，只決定了存檔時機，也會影響輸出history裡面的Fraction欄位
 COUNTER = 0.5
 # WEIGHT_DECAY 決定了L2 regularization的多寡，越大則regularize越多，其值通常在0.001這個scale。若太大可能造成梯度爆炸
 WEIGHT_DECAY = 0.001
+# Video 專屬parameters，Window代表一共要放幾張frame，必須是奇數。 STRIDE代表每兩張frame間隔多少時間
+WINDOW = 3
+STRIDE = 2
 
 ##### 不該碰的部分
 MAX_EPOCH = 100 ##決定最多會連續跑多少個epoch，這只是上限值，通常不會碰到它，設越大越好
-model = our_model.Image_model_by_distance(in_channel=5) ##請不要改這個
-NAME = "withimage_MSE" 
+IN_CHANNEL = 3*WINDOW + 2 
+model = our_model.Image_model_by_distance(in_channel=IN_CHANNEL) ##請不要改這個
+NAME = "video_w3s2" 
 POSTFIX = "_" + NAME
 
 ##### 其他只影響檔名的參數
@@ -205,9 +209,15 @@ def load_raw_holders(fname):
 all_db = torch.load(DATASET_HUMAN_PATH+'/'+'all_db.pt')
 
 
+# In[12]:
+
+
+all_db = Video_dataset.all_db2videoset(all_db, window=WINDOW, stride=STRIDE)
+
+
 # # Training
 
-# In[12]:
+# In[13]:
 
 
 #model = our_model.Image_model_by_distance(in_channel=2) # in_channel=2 <-> mask only
@@ -251,7 +261,7 @@ for epoch in range(max_epoch):
         history_holder.save()
         predictions_holder.save()
         raise
-    save_model("model_e{}.pkl".format(epoch))
+    #save_model("model_e{}.pkl".format(epoch))
     history_holder.save()
     predictions_holder.save()
 else:
