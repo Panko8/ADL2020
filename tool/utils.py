@@ -513,12 +513,15 @@ def do_detect_with_maps(model, img, conf_thresh, n_classes, nms_thresh, use_cuda
 
 str_to_int=lambda x: int(float(x))
 
-def unscale(W, H, boxes): #img is cv2 format
+def unscale(W, H, boxes, class_names): #img is cv2 format
     width = W
     height = H
     bboxes=[]
     for i in range(len(boxes)):
         box = boxes[i]
+        typ = class_names[box[6]]
+        if typ not in ["person"]:
+            continue
         x1 = (box[0] - box[2] / 2.0) * width
         y1 = (box[1] - box[3] / 2.0) * height
         x2 = (box[0] + box[2] / 2.0) * width

@@ -7,8 +7,9 @@ A transfer learning model to monitor social distance, with the help of pretraine
 
 ```
 ├── README.md
-├── __init__.py      
-├── demo_YOLO.py              demo to run pytorch
+├── __init__.py
+├── demo.py                   demo all
+├── demo_YOLO.py              demo to run YOLO only
 ├── extract_kitti_label.py    parsing Kitti labels
 ├── global_variable.py        define *Important* global variables
 ├── net_visualize.py          visualize model using tensorboard

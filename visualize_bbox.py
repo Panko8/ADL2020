@@ -39,6 +39,24 @@ def visualize_image_with_bbox(img, x1,y1,x2,y2):
     cv2.imshow("Drawn", drawn)
     cv2.waitKey(0)
 
+def visualize_image_with_bbox_and_distance(img, boxes, lines, color_ranking, bbox_color, delay=1, bbox_thick=2, line_thick=2):
+    #bbox=(x1,y1,x2,y2)
+    color = (0,0,255) # (B,G,R) wierd...
+    drawn = img.astype("uint8")
+    #cv2.imshow('ori',img)
+    for bbox in boxes:
+        cv2.rectangle(drawn, bbox[0:2], bbox[2:4], bbox_color, bbox_thick)
+    for p1,p2 in lines:
+        distance = lines[(p1,p2)]
+        color = color_ranking(distance)
+        if color == None:
+            continue
+        cv2.line(drawn, p1, p2, color, line_thick)
+    if delay!=0:
+        cv2.imshow("Drawn", drawn)
+        cv2.waitKey(delay)
+    return drawn
+
 if __name__=="__main__":
     if len(sys.argv)==6:
         img = sys.argv[1]
