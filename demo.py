@@ -10,13 +10,19 @@ from our_dataset import Image_dataset
 from our_model import Image_model_by_distance
 from visualize_bbox import visualize_image_with_bbox_and_distance as visualize
 
-INPUT_IMAGES_DIR = r"D:/AI/Final project/Kitti/ote2012/data_tracking_image_2/testing/image_02/0019" #16 18
-OUR_MODEL_WEIGHT_PATH = r"D:/AI/Final project/YOLOv4_pretrained/Attempt/model_weight_withimage_MSE/model_e12.pkl"
+INPUT_IMAGES_DIR = r"D:/AI/Final project/Kitti/ote2012/data_tracking_image_2/testing/image_02/0019" #16 18 19! 26
+SAMPLE_VIDEO_PATH = r"D:/AI/Final project/YOLOv4_pretrained/Attempt/videos/samples/taipei_walk_trim.mp4"
+MODE = 1  #1=images, 2=video
+
+MAX_SCREEN = 1500
+
+OUR_MODEL_WEIGHT_PATH = r"C:/Users/user/Desktop/w3s2!/model_e56.pkl"
 COLOR_TABLE = {0:None, 1:(0,255,0), 2:(0,255,255), 3:(0,0,255)} #(B,G,R) format for cv2, get color from ranking
 BBOX_COLOR = (255,128,128)
-WINDOW=1
-STRIDE=1
-OUTPUT_VIDEO_DIR = r"D:/AI/Final project/YOLOv4_pretrained/Attempt/output_video"
+WINDOW=3
+STRIDE=2
+YOLO_THRESHOLD = 0.3
+OUTPUT_VIDEO_DIR = r"C:/Users/user/Desktop/w3s2!/video19"
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 use_cuda = True if device=='cuda' else False
@@ -28,11 +34,21 @@ class_names = load_class_names(r"./data/coco.names")
 
 assert WINDOW%2==1, "Only support odd window"
 
-def color_ranking(distance): # get color from distance
-    rank = 3 if distance<=1.5 else 2 if distance<=3 else 1 if distance<=10 else 0
+def color_ranking(distance): # get color from distance (3:red, 2:yellow, 1:green, 0:None)
+    rank = 3 if distance<=3 else 2 if distance<=5 else 1 if distance<=6 else 0
     color = COLOR_TABLE[rank]
     return color
 
+def sample_video_loader(video_path, stride=10, start=200, end=-1):
+    vidcap = cv2.VideoCapture(video_path)
+    progress = True
+    count = 0
+    while progress:
+        progress,frame = vidcap.read()
+        if count%stride == 0 and count>=start and (end==-1 or count<=end):
+            yield frame
+        count += 1
+    
 
 class image_serializer():
     def __init__(self, window=WINDOW, stride=STRIDE):
@@ -120,7 +136,7 @@ def demo():
     null_obj = null()
     null_obj.resized_w = resized_w
     null_obj.resized_h = resized_h
-    input_gen = (INPUT_IMAGES_DIR+'/'+file for file in os.listdir(INPUT_IMAGES_DIR))
+    input_gen = (INPUT_IMAGES_DIR+'/'+file for file in os.listdir(INPUT_IMAGES_DIR)) if MODE==1 else sample_video_loader(SAMPLE_VIDEO_PATH)
     image_holder = image_serializer()
     fmap_holder = fmap_serializer()
     data_holder = data_serializer()
@@ -135,11 +151,22 @@ def demo():
             img = next(input_gen)
         except:
             break
-        img = Image.open(img).convert("RGB")
+        if MODE==1:
+            img = Image.open(img).convert("RGB")
+        elif MODE==2:
+            img = Image.fromarray(img[:,:,::-1])
+        W, H = img.size
+        if max(W,H)>1500:
+            if W>H:
+                img = img.resize((MAX_SCREEN, int(H/W*MAX_SCREEN)))
+            else:
+                img = img.resize((int(W/H*MAX_SCREEN),MAX_SCREEN))
         W, H = img.size
         resized=img.resize((resized_w, resized_h))
         with torch.no_grad():
-            boxes, fmaps = do_detect_with_maps(YOLO_model, resized, 0.5, 80, 0.4, use_cuda)
+            boxes, fmaps = do_detect_with_maps(YOLO_model, resized, YOLO_THRESHOLD, 80, 0.4, use_cuda)
+        print(boxes)
+        assert False
         boxes = unscale(W, H, boxes, class_names)
         cv2img = np.array(img)[:,:, ::-1] # convert to opencv image format, [W,H,C], where C in order [BGR]
         img = cv2.resize(cv2img, (resized_w,resized_h) )
@@ -163,7 +190,7 @@ def demo():
             center, (cv2img,W,H), img = curr_img
             x_fmap = fmap_holder[center].to(device).unsqueeze(0)
             #print(cv2img.shape)
-            for bbox1, bbox2, p1, p2 in data_holder[center]:
+            for bbox1, bbox2, p1, p2 in data_holder[center]: #TODO: batch version inference
                 all_boxes.add(bbox1)
                 all_boxes.add(bbox2)
                 mask1, mask2 = Image_dataset.draw_mask_and_resize(null_obj,W,H,bbox1), Image_dataset.draw_mask_and_resize(null_obj,W,H,bbox2)

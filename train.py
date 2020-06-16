@@ -255,6 +255,8 @@ for epoch in range(max_epoch):
         running(all_db, epoch, "training", batch_size)
         all_db.data = all_db.valid_data
         running(all_db, epoch, "validation", batch_size)
+        all_db.data = all_db.test_data
+        running(all_db, epoch, "testing", batch_size)
     except:
         save_model("model_e{}_WARN.pkl".format(epoch))
         save_raw_holders([history_holder, predictions_holder], NAME+"_e{}.holder".format(epoch)) #Don't allow overwrite, delete the old one instead!
