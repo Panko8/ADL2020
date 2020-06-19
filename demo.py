@@ -10,7 +10,7 @@ from our_dataset import Image_dataset
 from our_model import Image_model_by_distance
 from visualize_bbox import visualize_image_with_bbox_and_distance as visualize
 
-INPUT_IMAGES_DIR = r"D:/AI/Final project/Kitti/ote2012/data_tracking_image_2/testing/image_02/0019" #16 18 19! 26
+INPUT_IMAGES_DIR = r"D:/AI/Final project/Kitti/ote2012/data_tracking_image_2/testing/image_02/0018" #16 18 19 26
 SAMPLE_VIDEO_PATH = r"D:/AI/Final project/YOLOv4_pretrained/Attempt/videos/samples/taipei_walk_trim.mp4"
 MODE = 1  #1=images, 2=video
 
@@ -22,7 +22,7 @@ BBOX_COLOR = (255,128,128)
 WINDOW=3
 STRIDE=2
 YOLO_THRESHOLD = 0.3
-OUTPUT_VIDEO_DIR = r"C:/Users/user/Desktop/w3s2!/video19"
+OUTPUT_VIDEO_DIR = r"C:/Users/user/Desktop/w3s2!/video18"
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 use_cuda = True if device=='cuda' else False
@@ -136,7 +136,7 @@ def demo():
     null_obj = null()
     null_obj.resized_w = resized_w
     null_obj.resized_h = resized_h
-    input_gen = (INPUT_IMAGES_DIR+'/'+file for file in os.listdir(INPUT_IMAGES_DIR)) if MODE==1 else sample_video_loader(SAMPLE_VIDEO_PATH)
+    input_gen = (INPUT_IMAGES_DIR+'/'+file for file in sorted(os.listdir(INPUT_IMAGES_DIR))) if MODE==1 else sample_video_loader(SAMPLE_VIDEO_PATH)
     image_holder = image_serializer()
     fmap_holder = fmap_serializer()
     data_holder = data_serializer()
@@ -156,7 +156,7 @@ def demo():
         elif MODE==2:
             img = Image.fromarray(img[:,:,::-1])
         W, H = img.size
-        if max(W,H)>1500:
+        if max(W,H)>MAX_SCREEN:
             if W>H:
                 img = img.resize((MAX_SCREEN, int(H/W*MAX_SCREEN)))
             else:
@@ -165,8 +165,8 @@ def demo():
         resized=img.resize((resized_w, resized_h))
         with torch.no_grad():
             boxes, fmaps = do_detect_with_maps(YOLO_model, resized, YOLO_THRESHOLD, 80, 0.4, use_cuda)
-        print(boxes)
-        assert False
+        #print(boxes)
+        #assert False
         boxes = unscale(W, H, boxes, class_names)
         cv2img = np.array(img)[:,:, ::-1] # convert to opencv image format, [W,H,C], where C in order [BGR]
         img = cv2.resize(cv2img, (resized_w,resized_h) )
