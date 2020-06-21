@@ -28,10 +28,14 @@ def bbox_iou(box1, box2, x1y1x2y2=True):
         Mx = max(box1[2], box2[2])
         my = min(box1[1], box2[1])
         My = max(box1[3], box2[3])
-        w1 = box1[2] - box1[0]
-        h1 = box1[3] - box1[1]
-        w2 = box2[2] - box2[0]
-        h2 = box2[3] - box2[1]
+        #w1 = box1[2] - box1[0]
+        #h1 = box1[3] - box1[1]
+        #w2 = box2[2] - box2[0]
+        #h2 = box2[3] - box2[1]
+        w1 = abs(box1[2] - box1[0])  # right-left
+        h1 = abs(box1[3] - box1[1])  # top-bottom
+        w2 = abs(box2[2] - box2[0])
+        h2 = abs(box2[3] - box2[1])
     else:
         mx = min(box1[0] - box1[2] / 2.0, box2[0] - box2[2] / 2.0)
         Mx = max(box1[0] + box1[2] / 2.0, box2[0] + box2[2] / 2.0)
@@ -100,7 +104,7 @@ def nms(boxes, nms_thresh):
     out_boxes = []
     for i in range(len(boxes)):
         box_i = boxes[sortIds[i]]
-        if box_i[4] > 0:
+        if float(box_i[4]) > 0:
             out_boxes.append(box_i)
             for j in range(i + 1, len(boxes)):
                 box_j = boxes[sortIds[j]]
@@ -513,10 +517,11 @@ def do_detect_with_maps(model, img, conf_thresh, n_classes, nms_thresh, use_cuda
 
 str_to_int=lambda x: int(float(x))
 
-def unscale(W, H, boxes, class_names, person_only=True): #img is cv2 format
+def unscale(W, H, boxes, class_names, person_only=True, return_conf=False): #img is cv2 format
     width = W
     height = H
     bboxes=[]
+    conf=[]
     for i in range(len(boxes)):
         box = boxes[i]
         typ = class_names[box[6]]
@@ -528,7 +533,11 @@ def unscale(W, H, boxes, class_names, person_only=True): #img is cv2 format
         y2 = (box[1] + box[3] / 2.0) * height
         bbox = (x1,y1,x2,y2)
         bboxes.append(bbox)
-    return bboxes
+        conf.append(box[4])
+    if return_conf:
+        return bboxes, conf
+    else:
+        return bboxes
 
 def get_mask(W, H, bbox): #img is cv2 format
     #mask = np.zeros(img.shape[:2]) #(H,W,C)
@@ -537,5 +546,14 @@ def get_mask(W, H, bbox): #img is cv2 format
     x1,y1,x2,y2 = map(str_to_int, [x1,y1,x2,y2])
     plot_mask = cv2.rectangle(mask, (x1, y1), (x2, y2), (1, 1, 1), -1)
     return plot_mask
+
+def transform(x1, y1, x2, y2):
+    w, h = abs(x1 - x2), abs(y1 - y2)
+    cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+    x1 = cx - w/2   #left
+    x2 = cx + w/2   #right
+    y1 = cy - h/2   #bottom
+    y2 = cy + h/2   #up
+    return x1, y2, x2, y1
 
 
