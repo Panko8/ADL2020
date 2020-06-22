@@ -263,7 +263,7 @@ for epoch in range(max_epoch):
         history_holder.save()
         predictions_holder.save()
         raise
-    #save_model("model_e{}.pkl".format(epoch))
+    save_model("model_e{}.pkl".format(epoch))
     history_holder.save()
     predictions_holder.save()
 else:

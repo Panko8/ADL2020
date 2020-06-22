@@ -40,8 +40,8 @@ def plot_one(history, fig, axes, x_limit, window=1):
 
 def main():
     global fig, axes
-    SMOOTHING_WINDOW = 5
-    ENTRY = "validation"
+    SMOOTHING_WINDOW = 8 #2 for training, 8 for validation
+    ENTRY = "validation" #training/validation
     fig, axes = plt.subplots()
     fnames=[]
     histories=[]
@@ -49,9 +49,9 @@ def main():
         for f in os.listdir():
             if "history_" in f:
                 sys.argv.append(f+"/%s.log"%ENTRY)
-        sys.argv.remove("history_video_w3s2/%s.log"%ENTRY)
     for file in sys.argv[1:]:
         fname = file.split('\\')[-2] if '\\' in file else file.split('/')[-2]
+        fname = fname[8:]
         fnames.append(fname)
         history = read_and_parse_history(file)
         histories.append(history)
@@ -62,10 +62,10 @@ def main():
 
     plt.xlabel("Epoch")
     plt.ylabel("MSE")
-    plt.title("Learining curves for {}, window={}".format(ENTRY, SMOOTHING_WINDOW))
+    plt.title("Learining curves for {}, smooth={}".format(ENTRY, SMOOTHING_WINDOW))
     leg = fig.legend(labels=fnames, bbox_to_anchor=[0.9,0.88], fontsize=8)
     plt.ylim(0, 4)
-    #plt.xlim(0, 25)
+    plt.xlim(-2, 63)
     #fig.save('./curve.png')
     fig.show()
 
