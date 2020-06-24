@@ -40,8 +40,8 @@ def plot_one(history, fig, axes, x_limit, window=1):
 
 def main():
     global fig, axes
-    SMOOTHING_WINDOW = 8 #2 for training, 8 for validation
-    ENTRY = "validation" #training/validation
+    SMOOTHING_WINDOW = 2 #2 for training, 5 for validation
+    ENTRY = "training" #training/validation
     fig, axes = plt.subplots()
     fnames=[]
     histories=[]
@@ -56,7 +56,8 @@ def main():
         history = read_and_parse_history(file)
         histories.append(history)
     #x_limit = min( max(history.keys()) for history in histories )
-    x_limit = float("inf")
+    x_limit = 33
+    #x_limit = float("inf")
     for history in histories:
         plot_one(history, fig, axes, x_limit, window=SMOOTHING_WINDOW)
 
@@ -64,8 +65,8 @@ def main():
     plt.ylabel("MSE")
     plt.title("Learining curves for {}, smooth={}".format(ENTRY, SMOOTHING_WINDOW))
     leg = fig.legend(labels=fnames, bbox_to_anchor=[0.9,0.88], fontsize=8)
-    plt.ylim(0, 4)
-    plt.xlim(-2, 63)
+    plt.ylim(0, 7)
+    plt.xlim(0, 35)
     #fig.save('./curve.png')
     fig.show()
 

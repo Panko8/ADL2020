@@ -530,8 +530,8 @@ def read_all_db():
     return all_db
     
 if __name__=="__main__":
-    #construct_and_split_image_dataset()
-    _debug_image()
+    construct_and_split_image_dataset()
+    #_debug_image()
         
 
 

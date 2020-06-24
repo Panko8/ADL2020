@@ -43,7 +43,7 @@ A transfer learning model to monitor social distance, with the help of pretraine
 
 - Please download YOLO model weight from <https://github.com/AlexeyAB/darknet/releases/download/darknet_yolo_v3_optimal/yolov4.weights>
 - Please also download YOLO model config file from <https://raw.githubusercontent.com/AlexeyAB/darknet/master/cfg/yolov4.cfg>
-- It is recommended to download parsed dataset, rather than construct them all by yourself. The parsed dataset can be downloaded from <https://drive.google.com/file/d/1lzz4P0IMMMN7gy1KhJvaIebRXAcIXkct/view?usp=sharing>
+- It is recommended to download parsed dataset, rather than construct them all by yourself. (If you download this, you can safely ignore kitti related variables in global_variable.py) The parsed dataset can be downloaded from <https://drive.google.com/file/d/1lzz4P0IMMMN7gy1KhJvaIebRXAcIXkct/view?usp=sharing>
 - After downloading those files, please make sure you modify those variables listed in global_variable.py
 
 ## Training
