@@ -2,6 +2,8 @@
 
 ADL2020 Final Project
 
+## Monitoring Social Distances from Videos with Deep Transfer Learning from YOLOv4
+
 A transfer learning model to monitor social distance, with the help of pretrained YOLOv4 model
 
 - The pytorch implementation of YOLOv4 is modified from <https://github.com/Tianxiaomo/pytorch-YOLOv4>
@@ -70,7 +72,7 @@ python train.py
 
 - OUR_MODEL_WEIGHT_PATH: the file downloaded in Description-(3)
 - INPUT_IMAGES_DIR: the unzipped directory downloaded in Description-(4)
-- OUTPUT_VIDEO_DIR: the directory you would like the output images are put in
+- OUTPUT_VIDEO_DIR: the directory you would like the output images to put in
 
 2. Then simply type ...
 
